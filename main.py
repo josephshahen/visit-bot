@@ -1,20 +1,22 @@
 
+from flask import Flask
+import threading
 import requests
 import random
 import time
 from bs4 import BeautifulSoup
 import urllib3
 
+app = Flask(__name__)
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# === الخطوة 1: جلب بروكسيات جديدة من موقع مجاني ===
+# جلب بروكسيات جديدة
 def fetch_proxies():
     print("جاري تحميل البروكسيات...")
     url = "https://free-proxy-list.net/"
     response = requests.get(url)
     soup = BeautifulSoup(response.text, "html.parser")
     proxies = []
-
     for row in soup.select("table tbody tr"):
         cols = row.find_all("td")
         ip = cols[0].text.strip()
@@ -25,15 +27,10 @@ def fetch_proxies():
             proxies.append(proxy)
         if len(proxies) >= 500:
             break
-
     print(f"تم تحميل {len(proxies)} بروكسي")
     return proxies
 
-# === إعدادات الموقع والزيارات ===
-url = "https://nibras-ai.netlify.app"
-total_visits = 500000
-
-# === تنفيذ زيارة واحدة باستخدام session ===
+# تنفيذ زيارة واحدة
 def send_visit(session, proxy):
     headers = {
         "User-Agent": random.choice([
@@ -44,9 +41,8 @@ def send_visit(session, proxy):
     }
     session.headers.update(headers)
     session.proxies = {"http": proxy, "https": proxy}
-
     try:
-        response = session.get(url, timeout=10, verify=False)
+        response = session.get("https://nibras-ai.netlify.app", timeout=10, verify=False)
         if response.status_code == 200:
             print(f"زيارة ناجحة من {proxy}")
         else:
@@ -54,17 +50,29 @@ def send_visit(session, proxy):
     except Exception as e:
         print(f"فشل الوصول من {proxy}: {e}")
 
-# === التكرار اليومي ===
-while True:
-    print("\n=== بدء دورة زيارات جديدة ===")
-    proxies_list = fetch_proxies()
-    for i in range(total_visits):
-        proxy = random.choice(proxies_list)
-        session = requests.Session()
-        send_visit(session, proxy)
-        time.sleep(0.5)
-        if i % 100 == 0:
-            print(f"تم تنفيذ {i} زيارة")
+# حلقة التكرار اليومية
+def bot_loop():
+    total_visits = 500000
+    while True:
+        print("\n=== بدء دورة زيارات جديدة ===")
+        proxies_list = fetch_proxies()
+        for i in range(total_visits):
+            proxy = random.choice(proxies_list)
+            session = requests.Session()
+            send_visit(session, proxy)
+            time.sleep(0.5)
+            if i % 100 == 0:
+                print(f"تم تنفيذ {i} زيارة")
+        print("اكتملت 500,000 زيارة. انتظار 24 ساعة للدورة القادمة...")
+        time.sleep(86400)
 
-    print("اكتملت 500,000 زيارة. انتظار 24 ساعة للدورة القادمة...")
-    time.sleep(86400)
+# تشغيل البوت في الخلفية
+threading.Thread(target=bot_loop).start()
+
+# صفحة رئيسية لإبقاء Glitch شغال
+@app.route("/")
+def home():
+    return "البوت شغال حالياً!"
+
+if __name__ == "__main__":
+    app.run()
